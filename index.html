@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>相伴余生 · 深情告白</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #0a0015;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; }
+    #overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 10;
+    }
+    #greeting {
+      position: absolute; top: 12%; left: 50%; transform: translateX(-50%);
+      color: #fff; font-size: 6vw; font-weight: bold;
+      text-shadow: 0 0 25px #ff9eb5, 0 0 45px #ff4d6d;
+      white-space: nowrap; opacity: 0; transition: opacity 2s ease; z-index: 20;
+      pointer-events: none;
+    }
+    .word {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      font-size: 5vw; font-weight: bold; color: #fff;
+      text-shadow: 0 0 20px #ff4d6d, 0 0 40px #ff4d6d;
+      white-space: nowrap; opacity: 0; pointer-events: none;
+    }
+    .word.show {
+      animation: floatWord 4s ease-in-out forwards;
+    }
+    @keyframes floatWord {
+      0% { opacity: 0; transform: translateX(-50%) translateX(80vw); }
+      15% { opacity: 1; transform: translateX(-50%) translateX(0vw); }
+      70% { opacity: 1; transform: translateX(-50%) translateX(-10vw); }
+      100% { opacity: 0; transform: translateX(-50%) translateX(-100vw); }
+    }
+    #msgBox {
+      position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
+      background: rgba(20, 0, 30, 0.85); backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 2px solid rgba(255, 100, 130, 0.6); border-radius: 24px;
+      padding: 6vw 8vw; text-align: center; color: #fff;
+      pointer-events: auto; opacity: 0; transition: opacity 0.8s ease;
+      box-shadow: 0 0 40px rgba(255, 70, 100, 0.4);
+    }
+    #msgBox.show { opacity: 1; }
+    .msg-text {
+      font-size: 5.5vw; font-weight: bold; margin-bottom: 20px;
+      letter-spacing: 2px; text-shadow: 0 0 15px #ff9eb5;
+    }
+    #confirmBtn {
+      background: linear-gradient(135deg, #ff4d6d, #ff758f);
+      border: none; color: white; font-size: 5vw; font-weight: bold;
+      padding: 12px 40px; border-radius: 50px; letter-spacing: 3px;
+      cursor: pointer; box-shadow: 0 8px 25px rgba(255, 70, 100, 0.5);
+      transition: all 0.3s ease; -webkit-tap-highlight-color: transparent;
+    }
+    #confirmBtn:active { transform: scale(0.95); }
+    .ending-text {
+      position: absolute; width: 100%; text-align: center; color: #fff;
+      font-weight: bold; pointer-events: none; opacity: 0;
+      transition: opacity 1.2s ease;
+      text-shadow: 0 0 25px rgba(255, 80, 120, 0.9); z-index: 20;
+    }
+    #endLove { top: 40%; font-size: 8vw; }
+  </style>
+</head>
+<body>
+  <canvas id="heartCanvas"></canvas>
+  <div id="overlay">
+    <div id="greeting">亲爱的单恩雪女士，请查收我们的余生</div>
+    <div id="wordsContainer"></div>
+    <div id="msgBox">
+      <div class="msg-text">你是否愿意与我相伴余生</div>
+      <button id="confirmBtn">我愿意</button>
+    </div>
+    <div class="ending-text" id="endLove"></div>
+  </div>
+  <canvas id="storyCanvas" style="display:none;"></canvas>
+
+  <!-- 🎵 音乐播放器 —— 请将下方的 src 替换成你实际存放的歌曲文件名 -->
+  <audio id="bgMusic" preload="auto" loop>
+    <source id="musicSource" src="9420.mp3" type="audio/mpeg">
+    您的浏览器不支持音频播放。
+  </audio>
+
+  <script>
+    (function(){
+      // ========== 获取元素 ==========
+      const heartCanvas = document.getElementById('heartCanvas');
+      const heartCtx = heartCanvas.getContext('2d');
+      const storyCanvas = document.getElementById('storyCanvas');
+      const storyCtx = storyCanvas.getContext('2d');
+      const greeting = document.getElementById('greeting');
+      const wordsContainer = document.getElementById('wordsContainer');
+      const msgBox = document.getElementById('msgBox');
+      const confirmBtn = document.getElementById('confirmBtn');
+      const endLove = document.getElementById('endLove');
+      const bgMusic = document.getElementById('bgMusic');
+
+      let W, H;
+
+      // ========== 自适应尺寸 ==========
+      function resize() {
+        W = window.innerWidth;
+        H = window.innerHeight;
+        heartCanvas.width = W;
+        heartCanvas.height = H;
+        storyCanvas.width = W;
+        storyCanvas.height = H;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      // 开头问候语
+      setTimeout(() => { greeting.style.opacity = '1'; }, 400);
+      setTimeout(() => { greeting.style.opacity = '0'; }, 3500);
+
+      // ========== 漂浮情话 (7句，真挚不油腻) ==========
+      const loveLines = [
+        "从遇见你的那一刻起，我的世界便充满了色彩",
+        "你是我平淡生活里最温柔的惊喜",
+        "和你在一起的每一天，都像被阳光拥抱",
+        "我想牵着你的手，走过清晨与黄昏",
+        "你的名字，是我听过最短的情诗",
+        "遇见你之后，所有未来都值得期待",
+        "你一笑，我的整个世界都亮了"
+      ];
+      let wordDivs = [];
+      function createWords() {
+        wordsContainer.innerHTML = '';
+        wordDivs = [];
+        loveLines.forEach((text, i) => {
+          const d = document.createElement('div');
+          d.className = 'word';
+          d.style.top = (16 + i * 10) + '%';
+          d.textContent = text;
+          wordsContainer.appendChild(d);
+          wordDivs.push(d);
+        });
+      }
+      createWords();
+      let wordIndex = 0;
+      let wordTimer = null;
+      function startFloating() {
+        wordIndex = 0;
+        function next() {
+          if (wordIndex < wordDivs.length) {
+            wordDivs[wordIndex].classList.add('show');
+            wordIndex++;
+          } else {
+            clearInterval(wordTimer);
+            setTimeout(() => { msgBox.classList.add('show'); }, 2000);
+          }
+        }
+        next();
+        wordTimer = setInterval(next, 2800);
+      }
+
+      // ========== 爱心雨核心 (永不黑屏) ==========
+      const heartScale = Math.min(W, H) / 38;
+      const cx = W / 2;
+      const cy = H / 2 - heartScale * 2.5;
+      function heartX(t) { return 16 * Math.pow(Math.sin(t), 3); }
+      function heartY(t) { return 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t); }
+
+      const totalParticles = 180;
+      const targets = [];
+      for (let i = 0; i < totalParticles; i++) {
+        const t = (i / totalParticles) * Math.PI * 2;
+        targets.push({
+          x: heartX(t) * heartScale + cx,
+          y: -heartY(t) * heartScale + cy
+        });
+      }
+
+      const particles = [];
+      for (let i = 0; i < totalParticles; i++) {
+        particles.push({
+          x: Math.random() * W,
+          y: Math.random() * H * 0.8,
+          size: 8 + Math.random() * 14,
+          color: `hsl(${340 + Math.random()*20}, 85%, ${55 + Math.random()*30}%)`,
+          target: targets[i],
+          state: 'falling',
+          startX: 0, startY: 0, progress: 0
+        });
+      }
+
+      let startTime = null;
+      let phase = 'falling';
+      const FALL_DUR = 2.0;
+      const MOVE_DUR = 1.8;
+      let doneTime = 0;
+      let floatingStarted = false;
+
+      function drawMiniHeart(ctx, x, y, size, color) {
+        ctx.save();
+        ctx.translate(x, y);
+        const s = size / 18;
+        ctx.scale(s, s);
+        ctx.beginPath();
+        ctx.moveTo(0, -3);
+        ctx.bezierCurveTo(-8, -8, -15, 2, 0, 11);
+        ctx.bezierCurveTo(15, 2, 8, -8, 0, -3);
+        ctx.fillStyle = color;
+        ctx.shadowColor = 'rgba(255,80,120,0.7)';
+        ctx.shadowBlur = 4;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+
+      function heartLoop(ts) {
+        try {
+          if (!startTime) startTime = ts;
+          const elapsed = (ts - startTime) / 1000;
+
+          // 背景绘制（避免纯黑）
+          heartCtx.clearRect(0, 0, W, H);
+          const grad = heartCtx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.8);
+          grad.addColorStop(0, 'rgba(80,10,40,0.6)');
+          grad.addColorStop(0.5, 'rgba(30,0,20,0.8)');
+          grad.addColorStop(1, '#0a0015');
+          heartCtx.fillStyle = grad;
+          heartCtx.fillRect(0, 0, W, H);
+
+          // 星光闪烁
+          for (let i = 0; i < 40; i++) {
+            const sx = (i * 47 + elapsed * 30) % W;
+            const sy = (i * 29 + elapsed * 25) % H;
+            heartCtx.fillStyle = `rgba(255,210,230,${0.2 + Math.sin(elapsed*3 + i)*0.15})`;
+            heartCtx.beginPath();
+            heartCtx.arc(sx, sy, 1.8, 0, Math.PI*2);
+            heartCtx.fill();
+          }
+
+          // 阶段切换
+          if (phase === 'falling' && elapsed >= FALL_DUR) {
+            phase = 'moving';
+            particles.forEach(p => { p.state = 'moving'; p.startX = p.x; p.startY = p.y; });
+          }
+          if (phase === 'moving' && elapsed >= FALL_DUR + MOVE_DUR) {
+            phase = 'done';
+            doneTime = elapsed;
+            particles.forEach(p => { p.state = 'done'; });
+            if (!floatingStarted) {
+              floatingStarted = true;
+              startFloating();
+            }
+          }
+
+          // 粒子绘制
+          if (phase === 'falling') {
+            particles.forEach(p => {
+              p.y += p.size * 0.45 + 2.8;
+              if (p.y > H + 30) { p.y = -30; p.x = Math.random() * W; }
+              drawMiniHeart(heartCtx, p.x, p.y, p.size, p.color);
+            });
+          } else if (phase === 'moving') {
+            const moveElapsed = elapsed - FALL_DUR;
+            particles.forEach(p => {
+              if (p.state === 'moving') {
+                p.progress = Math.min(moveElapsed / MOVE_DUR, 1);
+                const t = p.progress < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+                const mx = p.startX + (p.target.x - p.startX) * t;
+                const my = p.startY + (p.target.y - p.startY) * t;
+                drawMiniHeart(heartCtx, mx, my, p.size, p.color);
+                if (p.progress >= 1) p.state = 'done';
+              }
+            });
+          } else if (phase === 'done') {
+            const beat = 1 + 0.04 * Math.sin((elapsed - doneTime) * 3.5);
+            heartCtx.save();
+            heartCtx.translate(cx, cy);
+            heartCtx.scale(beat, beat);
+            heartCtx.translate(-cx, -cy);
+            particles.forEach(p => drawMiniHeart(heartCtx, p.target.x, p.target.y, p.size * 0.95, p.color));
+            heartCtx.restore();
+            for (let i = 0; i < 14; i++) {
+              const angle = (elapsed * 0.4 + i * Math.PI * 2 / 14) % (Math.PI*2);
+              const r = heartScale * 19 + Math.sin(elapsed * 1.5 + i) * 25;
+              drawMiniHeart(heartCtx, cx + Math.cos(angle)*r, cy + Math.sin(angle)*r*0.8,
+                5 + Math.abs(Math.sin(elapsed + i))*6, `hsl(${340 + i*5},80%,70%)`);
+            }
+          }
+
+          if (storyCanvas.style.display !== 'block') {
+            requestAnimationFrame(heartLoop);
+          }
+        } catch(e) {
+          requestAnimationFrame(heartLoop);
+        }
+      }
+      requestAnimationFrame(heartLoop);
+
+      // ========== 确认按钮 (播放音乐 + 开始故事) ==========
+      confirmBtn.addEventListener('click', () => {
+        // 播放音乐
+        if (bgMusic) {
+          bgMusic.play().then(() => {
+            console.log('音乐开始播放');
+          }).catch(err => {
+            console.log('音乐播放失败:', err);
+          });
+        }
+
+        heartCanvas.style.display = 'none';
+        msgBox.classList.remove('show');
+        storyCanvas.style.display = 'block';
+        startStory();
+      });
+      confirmBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        confirmBtn.click();
+      });
+
+      // ========== 故事动画（一生之旅，7个场景） ==========
+      function startStory() {
+        const ctx = storyCtx;
+        let storyStart = null;
+        const TOTAL_DUR = 62;
+        let sceneIdx = 0;
+        let sceneStartTime = 0;
+        let endingActive = false;
+        let fireworks = [];
+        let fireworkTimer = 0;
+
+        const scenes = [
+          { name: '相遇', dur: 9, bg: 'spring' },
+          { name: '相恋', dur: 8, bg: 'rain' },
+          { name: '结婚', dur: 11, bg: 'wedding' },
+          { name: '孕育', dur: 7, bg: 'home' },
+          { name: '生子', dur: 7, bg: 'hospital' },
+          { name: '中年', dur: 9, bg: 'autumn' },
+          { name: '老年', dur: 11, bg: 'sunset' }
+        ];
+
+        function drawSky(type) {
+          const grad = ctx.createLinearGradient(0,0,0,H);
+          const colors = {
+            spring: ['#87CEEB','#E0F7FA','#B2DFDB'],
+            rain: ['#5D6D7E','#85929E','#ABB2B9'],
+            wedding: ['#FADBD8','#F9E79F','#FDEBD0'],
+            home: ['#FFF3E0','#FFE0B2'],
+            hospital: ['#E8F8F5','#D1F2EB'],
+            autumn: ['#FAD7A1','#F5B041','#DC7633'],
+            sunset: ['#FF7E5F','#FEB47B','#8B2252']
+          };
+          const cols = colors[type];
+          grad.addColorStop(0, cols[0]);
+          grad.addColorStop(0.7, cols[1]);
+          grad.addColorStop(1, cols[2] || cols[1]);
+          ctx.fillStyle = grad;
+          ctx.fillRect(0,0,W,H);
+        }
+
+        function drawGround(type) {
+          const groundColors = {
+            spring:'#7DCEA0', rain:'#616A6B', wedding:'#7DCEA0',
+            home:'#D7CCC8', hospital:'#D7CCC8', autumn:'#C68E58', sunset:'#4A2C2A'
+          };
+          ctx.fillStyle = groundColors[type] || '#666';
+          ctx.fillRect(0, H*0.75, W, H*0.25);
+        }
+
+        function drawPerson(x, y, scale, opts={}) {
+          const { gender='male', age='young', pose='stand', bodyColor } = opts;
+          ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+          const skin = age==='old' ? '#E8C9A0' : '#FDDCB5';
+          const hair = age==='old' ? '#D7D7D9' : (gender==='female' ? '#3E2723' : '#2C1E16');
+          ctx.beginPath(); ctx.arc(0,-38,14,0,Math.PI*2); ctx.fillStyle=skin; ctx.fill();
+          ctx.fillStyle='#1A1A1A';
+          ctx.beginPath(); ctx.arc(-5,-41,1.8,0,Math.PI); ctx.fill();
+          ctx.beginPath(); ctx.arc(5,-41,1.8,0,Math.PI); ctx.fill();
+          ctx.strokeStyle='#8B5E3C'; ctx.lineWidth=1.2;
+          ctx.beginPath(); ctx.arc(0,-34,6,0.1,Math.PI-0.1); ctx.stroke();
+          ctx.fillStyle=hair;
+          if(gender==='female') {
+            ctx.beginPath(); ctx.arc(0,-40,15,Math.PI,0); ctx.fill();
+            ctx.fillRect(-15,-45,30,12);
+            ctx.beginPath(); ctx.ellipse(-13,-33,5,16,-0.2,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(13,-33,5,16,0.2,0,Math.PI*2); ctx.fill();
+          } else {
+            ctx.beginPath(); ctx.arc(0,-41,15,Math.PI,0); ctx.fill();
+            ctx.fillRect(-14,-47,28,10);
+          }
+          const bodyClr = bodyColor || (gender==='female'?'#E74C3C':'#5DADE2');
+          ctx.fillStyle = bodyClr;
+          if(pose==='kneel') ctx.fillRect(-12,-12,24,18);
+          else ctx.fillRect(-12,-24,24,30);
+          ctx.strokeStyle='#2C3E50'; ctx.lineWidth=4;
+          if(pose==='kneel') {
+            ctx.beginPath(); ctx.moveTo(-6,6); ctx.lineTo(-14,20); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(6,6); ctx.lineTo(14,20); ctx.stroke();
+          } else {
+            ctx.beginPath(); ctx.moveTo(-6,6); ctx.lineTo(-8,24); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(6,6); ctx.lineTo(8,24); ctx.stroke();
+          }
+          ctx.strokeStyle=skin; ctx.lineWidth=5;
+          if(pose==='holdBaby') {
+            ctx.beginPath(); ctx.moveTo(-12,-20); ctx.lineTo(-20,-16); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12,-20); ctx.lineTo(18,-18); ctx.stroke();
+            ctx.fillStyle='#FADBD8'; ctx.fillRect(-4,-30,14,10);
+            ctx.fillStyle='#F5B7B1'; ctx.beginPath(); ctx.arc(3,-32,5,0,Math.PI*2); ctx.fill();
+          } else if(pose==='kneel') {
+            ctx.beginPath(); ctx.moveTo(-12,-6); ctx.lineTo(-20,-16); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12,-6); ctx.lineTo(20,-16); ctx.stroke();
+          } else {
+            ctx.beginPath(); ctx.moveTo(-12,-20); ctx.lineTo(-22,-6); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(12,-20); ctx.lineTo(22,-6); ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        function drawScene(scene, progress, elapsed) {
+          drawSky(scene.bg);
+          drawGround(scene.bg);
+          const midX = W/2, groundY = H*0.75;
+
+          if(scene.name==='相遇') {
+            for(let i=0;i<25;i++){ctx.fillStyle='rgba(255,182,193,0.4)';ctx.beginPath();ctx.arc(Math.random()*W,Math.random()*H*0.7,2,0,Math.PI*2);ctx.fill();}
+            drawPerson(midX-100+progress*100, groundY-30, 0.9, {gender:'male'});
+            drawPerson(midX+100-progress*100, groundY-30, 0.9, {gender:'female'});
+            ctx.fillStyle='#fff';ctx.font='bold 5vw "PingFang SC"';ctx.textAlign='center';
+            ctx.fillText('那年春天，我们相遇', midX, H*0.2);
+          } else if(scene.name==='相恋') {
+            for(let i=0;i<60;i++){ctx.strokeStyle='rgba(200,220,240,0.5)';ctx.beginPath();ctx.moveTo(Math.random()*W,Math.random()*H*0.85);ctx.lineTo(Math.random()*4-2,Math.random()*15+10);ctx.stroke();}
+            drawPerson(midX-15, groundY-38, 0.9, {bodyColor:'#2C3E50'});
+            drawPerson(midX+15, groundY-38, 0.9, {gender:'female',bodyColor:'#E91E63'});
+            ctx.fillStyle='#34495E';ctx.beginPath();ctx.ellipse(midX, groundY-80, 35, 12, 0, Math.PI, 0);ctx.fill();
+            ctx.fillStyle='#2C3E50';ctx.fillRect(midX-2, groundY-80, 4, 30);
+            ctx.fillStyle='#fff';ctx.fillText('从此，风雨同行', midX, H*0.2);
+          } else if(scene.name==='结婚') {
+            ctx.fillStyle='#F5B7B1';ctx.fillRect(midX-40, groundY-90, 80, 10);
+            ctx.beginPath();ctx.arc(midX, groundY-90, 40, Math.PI, 0);ctx.fill();
+            if(progress<0.5) {
+              drawPerson(midX-25, groundY-20-(progress/0.5)*15, 0.9, {pose:'kneel',bodyColor:'#1C1C1C'});
+              drawPerson(midX+30, groundY-35, 0.95, {gender:'female',bodyColor:'#FFFFFF'});
+            } else {
+              drawPerson(midX-20, groundY-35, 0.9, {bodyColor:'#1C1C1C'});
+              drawPerson(midX+25, groundY-35, 0.95, {gender:'female',bodyColor:'#FFFFFF'});
+            }
+            ctx.fillStyle='#fff';ctx.fillText('执子之手，与子偕老', midX, H*0.15);
+          } else if(scene.name==='孕育') {
+            drawPerson(midX-20, groundY-38, 0.9, {bodyColor:'#3498DB'});
+            drawPerson(midX+30, groundY-38, 1.0, {gender:'female',bodyColor:'#F1948A'});
+            ctx.fillStyle='#F1948A';ctx.beginPath();ctx.arc(midX+30, groundY-55, 13+Math.sin(elapsed*3)*1.5, 0, Math.PI*2);ctx.fill();
+            ctx.fillStyle='#fff';ctx.fillText('爱的结晶', midX, H*0.18);
+          } else if(scene.name==='生子') {
+            drawPerson(midX-35, groundY-38, 0.9, {bodyColor:'#2ECC71'});
+            drawPerson(midX+25, groundY-38, 0.95, {gender:'female',pose:'holdBaby',bodyColor:'#F5B7B1'});
+            ctx.fillStyle='#fff';ctx.fillText('新的生命', midX, H*0.18);
+          } else if(scene.name==='中年') {
+            for(let i=0;i<20;i++){ctx.fillStyle='rgba(210,120,40,0.5)';ctx.beginPath();ctx.ellipse(Math.random()*W,H*0.4+Math.random()*H*0.4,3,1.5,0.3,0,Math.PI*2);ctx.fill();}
+            drawPerson(midX-55, groundY-35, 0.9, {age:'middle',bodyColor:'#5D6D7E'});
+            drawPerson(midX-20, groundY-35, 0.9, {gender:'female',age:'middle',bodyColor:'#C39BD3'});
+            drawPerson(midX+45, groundY-40, 0.7, {bodyColor:'#F39C12'});
+            ctx.fillStyle='#fff';ctx.fillText('时光静好', midX, H*0.18);
+          } else if(scene.name==='老年') {
+            const sunX = midX, sunY = H*0.55;
+            const grad = ctx.createRadialGradient(sunX,sunY,0,sunX,sunY,60);
+            grad.addColorStop(0,'#FFF9C4');grad.addColorStop(0.5,'#FFB74D');grad.addColorStop(1,'rgba(255,87,34,0)');
+            ctx.fillStyle=grad;ctx.beginPath();ctx.arc(sunX,sunY,50+Math.sin(elapsed*0.5)*5,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#5D4037';ctx.fillRect(midX-50, groundY-15, 100, 12);
+            ctx.fillRect(midX-45, groundY-30, 8, 20);ctx.fillRect(midX+37, groundY-30, 8, 20);
+            drawPerson(midX-25, groundY-25, 0.85, {age:'old',bodyColor:'#8D6E63'});
+            drawPerson(midX+25, groundY-25, 0.85, {gender:'female',age:'old',bodyColor:'#A1887F'});
+            ctx.fillStyle='#fff';ctx.shadowColor='rgba(255,140,0,0.8)';ctx.shadowBlur=12;
+            ctx.fillText('相伴余生', midX, H*0.12);ctx.shadowBlur=0;
+          }
+        }
+
+        function storyLoop(ts) {
+          try {
+            if (!storyStart) storyStart = ts, sceneStartTime = ts;
+            const elapsedTotal = (ts - storyStart) / 1000;
+
+            if (elapsedTotal > TOTAL_DUR && !endingActive) {
+              endingActive = true;
+              // 结尾情话
+              setTimeout(()=>{ endLove.style.opacity='1'; endLove.textContent='💖 攒满世间温柔，尽数赠予心上人 💖'; }, 500);
+              setTimeout(()=>{ endLove.textContent='💖 平淡朝夕里，藏着最长久的深情 💖'; }, 3500);
+              setTimeout(()=>{ endLove.textContent='🌹 满心期许皆是你，往后朝夕不负相遇 🌹'; }, 6500);
+              setTimeout(()=>{ endLove.textContent='🌹 保持热爱，奔赴属于我们的岁岁年年 🌹'; }, 9500);
+              setTimeout(()=>{ endLove.textContent='我爱你，老婆'; endLove.style.fontSize='10vw'; }, 13000);
+            }
+
+            if (endingActive) {
+              ctx.clearRect(0,0,W,H);
+              ctx.fillStyle='#0a0015';ctx.fillRect(0,0,W,H);
+              if(fireworkTimer<=0 && fireworks.length<10) fireworkTimer=0.6;
+              fireworkTimer-=0.016;
+              if(Math.random()<0.12) fireworks.push({x:Math.random()*W, y:Math.random()*H*0.6+H*0.1, color:`hsl(${Math.random()*360},85%,65%)`, life:1.0});
+              fireworks.forEach(f=>f.life-=0.015);
+              fireworks=fireworks.filter(f=>f.life>0);
+              fireworks.forEach(f=>{
+                for(let i=0;i<12;i++){
+                  const a=(i/12)*Math.PI*2;
+                  ctx.fillStyle=f.color;ctx.beginPath();ctx.arc(f.x+Math.cos(a)*8, f.y+Math.sin(a)*8, 3, 0, Math.PI*2);ctx.fill();
+                }
+              });
+              requestAnimationFrame(storyLoop);
+              return;
+            }
+
+            let sceneElapsed = (ts - sceneStartTime) / 1000;
+            let accumulated = 0;
+            for (let i=0; i<scenes.length; i++) {
+              if (elapsedTotal < accumulated + scenes[i].dur) {
+                if (sceneIdx !== i) {
+                  sceneIdx = i;
+                  sceneStartTime = ts - accumulated * 1000;
+                  sceneElapsed = (ts - sceneStartTime) / 1000;
+                }
+                break;
+              }
+              accumulated += scenes[i].dur;
+            }
+            const current = scenes[sceneIdx];
+            const progress = Math.min(sceneElapsed / current.dur, 1);
+            ctx.clearRect(0,0,W,H);
+            drawScene(current, progress, sceneElapsed);
+            requestAnimationFrame(storyLoop);
+          } catch(e) {
+            requestAnimationFrame(storyLoop);
+          }
+        }
+        requestAnimationFrame(storyLoop);
+      }
+    })();
+  </script>
+</body>
+</html>
